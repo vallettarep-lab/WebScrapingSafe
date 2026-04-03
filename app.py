@@ -17,8 +17,11 @@ def get_atlanticCouncil_articles(text):
     lines = text.splitlines()
     index = -1;
     target = "Content"
-    index = lines.index(target)
-    
+    if target in lines:
+        index = lines.index(target)
+    else:
+        st.error("キーワード「Content」が見つかりませんでした。")
+        return None
     rows = []
 
     while True:
@@ -120,10 +123,11 @@ else:
 
                 df = get_atlanticCouncil_articles(text)
 
-                if len(df) > 0:
-                    st.success(f"{len(df)}件の記事を取得しました")
-                else:
-                    st.error("記事がありませんでした")
+                if df is not None:
+                    if len(df) > 0:
+                        st.success(f"{len(df)}件の記事を取得しました")
+                    else:
+                        st.error("記事がありませんでした")
 
             except Exception as e:
                 st.error(str(e))
