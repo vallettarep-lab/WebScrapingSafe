@@ -3,11 +3,10 @@ import pandas as pd
 import re
 from io import BytesIO
 
-def searchDate(lines, index):
+def searchDate(lines, index, pattern):
   recordLength = 12
   for i in range(recordLength):
     date = lines[index+i]
-    pattern = r'[A-Z][a-z]+ \d{1,2}, \d{4}'
     if re.search(pattern, date):
       return i
   return -1
@@ -24,8 +23,9 @@ def get_atlanticCouncil_articles(text):
         return None
     rows = []
 
+    pattern = r'[A-Z][a-z]+ \d{1,2}, \d{4}'
     while True:
-        resultSearchDate = searchDate(lines,index)
+        resultSearchDate = searchDate(lines,index, pattern)
         if resultSearchDate == -1:
             break
         else:
@@ -52,6 +52,50 @@ def get_atlanticCouncil_articles(text):
         index += 7
         df = pd.DataFrame(rows, columns=["#", "日付", "レポートタイトル", "URL","Thinktank名","関係国","トピック","執筆者","まとめ翻訳","まとめ翻訳英文"])
     return df
+
+#CSIS
+def get_csis_articles(text):
+    lines = text.splitlines()
+    index = -1;
+    target = "Display Archived Results"
+    if target in lines:
+        index = lines.index(target)
+    else:
+        st.error("キーワード「Display Archived Results」が見つかりませんでした。")
+        return None
+
+    rows = []
+    pattern = r'(?:by\s+)?(.+?)\s+[—-]\s+([A-Z][a-z]+ \d{1,2}, \d{4})'
+    while True:
+        resultSearchDate = searchDate(lines,index,pattern)
+        if resultSearchDate == -1:
+            break
+        else:
+            index += resultSearchDate
+        title = lines[index-3]
+
+        match = re.search(r'([A-Z][a-z]+ \d{1,2}, \d{4})', lines[index])
+
+        if match:
+            date = match.group(1)
+        else:
+            date = None
+
+        match = re.search(r'by (.*?) —', lines[index])
+
+        if match:
+            author = match.group(1)
+        else:
+            author = "N/A"
+
+        overview = lines[index-2]
+
+        rows.append(["", date, title, "","CSIS","","",author,"",overview])
+        index += 3
+    df = pd.DataFrame(rows, columns=["#", "日付", "レポートタイトル", "URL","Thinktank名","関係国","トピック","執筆者","まとめ翻訳","まとめ翻訳英文"])
+
+    return df
+
 #Brookings
 def get_brookings_articles():
     rows = []
@@ -59,13 +103,9 @@ def get_brookings_articles():
 
     return df
 
-#CSIS
-def get_csis_articles():
-    rows = []
-    # DataFrame作成
-    df = pd.DataFrame(rows,columns=["#", "日付", "レポートタイトル", "URL","Thinktank名"]).drop_duplicates(subset=['URL'])
-
-    return df
+# クリア処理を行う関数を定義
+def clear_text():
+    st.session_state["input_text"] = ""
 
 # ------------------------
 # パスワード設定
@@ -103,13 +143,24 @@ else:
     site = st.selectbox(
         "取得するサイトを選択してください",
         #["Brookings", "CSIS"]
-        ["AtlanticCouncil"]
+        ["AtlanticCouncil","CSIS"]
     )
 
-    # テキスト入力
-    text = st.text_area("Webサイトから取得したテキストを入力してください")
+    # レイアウト作成
+    col1, col2 = st.columns([9, 1], vertical_alignment="bottom")
 
-    #st.write("入力された値:", text)
+    with col1:
+        # テキストエリア。valueではなくkeyで管理します。
+        # ※初期値を与えたい場合は、ここではなくsession_stateの初期化で行います。
+        text = st.text_area(
+            "Webサイトから取得したテキストを入力してください", 
+            key="input_text",
+            height=200
+        )
+
+    with col2:
+        # ボタンの on_click に関数を渡す（ここがポイント！）
+        st.button("クリア", on_click=clear_text, use_container_width=True)
 
     # ボタン
     if st.button("記事を取得"):
@@ -131,34 +182,33 @@ else:
 
             except Exception as e:
                 st.error(str(e))
+        elif site == "CSIS":
+            try:
+
+                df = get_csis_articles(text)
+
+                if df is not None:
+                    if len(df) > 0:
+                        st.success(f"{len(df)}件の記事を取得しました")
+                    else:
+                        st.error("記事がありませんでした")
+
+            except Exception as e:
+                st.error(str(e))
 
         elif site == "Brookings":
             try:
 
-                df = get_brookings_articles()
+                df = get_brookings_articles(text)
 
-                if len(df) > 0:
-                    st.success(f"{len(df)}件の記事を取得しました")
-                else:
-                    st.error("記事がありませんでした")
-
-            except Exception as e:
-                st.error(str(e))
-
-
-        elif site == "CSIS":
-            try:
-
-                df = get_csis_articles()
-
-                if len(df) > 0:
-                    st.success(f"{len(df)}件の記事を取得しました")
-                else:
-                    st.error("記事がありませんでした")
+                if df is not None:
+                    if len(df) > 0:
+                        st.success(f"{len(df)}件の記事を取得しました")
+                    else:
+                        st.error("記事がありませんでした")
 
             except Exception as e:
                 st.error(str(e))
-
         
         if df is not None:
             # Excel作成
@@ -173,13 +223,6 @@ else:
                     file_name="AtlanticCouncil.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-            elif site == "Brookings":
-                st.download_button(
-                    label="Excelダウンロード",
-                    data=excel_data,
-                    file_name="Brookings.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
             elif site == "CSIS":
                 st.download_button(
                     label="Excelダウンロード",
@@ -187,3 +230,11 @@ else:
                     file_name="CSIS.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
+            elif site == "Brookings":
+                st.download_button(
+                    label="Excelダウンロード",
+                    data=excel_data,
+                    file_name="Brookings.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            
