@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import re
 from io import BytesIO
+from openpyxl import load_workbook
+from openpyxl.styles import Alignment,Font
 
 def searchDate(lines, index, pattern):
   recordLength = 12
@@ -48,7 +50,7 @@ def get_atlanticCouncil_articles(text):
             topic1 = lines[index+4]
             topic2 = lines[index+5]
         
-        rows.append(["", date, title, "","AtlanticCouncil","",f"{topic1}、{topic2}",author,"",overview])
+        rows.append(["", date, title, "","Atlantic Council","",f"{topic1}、{topic2}",author,"",overview])
         index += 7
         df = pd.DataFrame(rows, columns=["#", "日付", "レポートタイトル", "URL","Thinktank名","関係国","トピック","執筆者","まとめ翻訳","まとめ翻訳英文"])
     return df
@@ -169,72 +171,77 @@ else:
 
         df = None
 
-        if site == "AtlanticCouncil":
-            try:
-
+        try:
+            if site == "AtlanticCouncil":
                 df = get_atlanticCouncil_articles(text)
-
-                if df is not None:
-                    if len(df) > 0:
-                        st.success(f"{len(df)}件の記事を取得しました")
-                    else:
-                        st.error("記事がありませんでした")
-
-            except Exception as e:
-                st.error(str(e))
-        elif site == "CSIS":
-            try:
-
+            elif site == "CSIS":
                 df = get_csis_articles(text)
-
-                if df is not None:
-                    if len(df) > 0:
-                        st.success(f"{len(df)}件の記事を取得しました")
-                    else:
-                        st.error("記事がありませんでした")
-
-            except Exception as e:
-                st.error(str(e))
-
-        elif site == "Brookings":
-            try:
-
+            elif site == "Brookings":
                 df = get_brookings_articles(text)
 
-                if df is not None:
-                    if len(df) > 0:
-                        st.success(f"{len(df)}件の記事を取得しました")
-                    else:
-                        st.error("記事がありませんでした")
+            if df is not None:
+                if len(df) > 0:
+                    st.success(f"{len(df)}件の記事を取得しました")
+                else:
+                    st.error("記事がありませんでした")
 
-            except Exception as e:
-                st.error(str(e))
+        except Exception as e:
+            st.error(str(e))
         
         if df is not None:
             # Excel作成
             output = BytesIO()
             df.to_excel(output, index=False, engine="openpyxl")
-            excel_data = output.getvalue()
 
-            if site == "AtlanticCouncil":
-                st.download_button(
-                    label="Excelダウンロード",
-                    data=excel_data,
-                    file_name="AtlanticCouncil.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            elif site == "CSIS":
-                st.download_button(
-                    label="Excelダウンロード",
-                    data=excel_data,
-                    file_name="CSIS.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            elif site == "Brookings":
-                st.download_button(
-                    label="Excelダウンロード",
-                    data=excel_data,
-                    file_name="Brookings.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+            # openpyxlで加工するために再読み込み
+            output.seek(0)
+            wb = load_workbook(output)
+            ws = wb.active
+
+            # ------------------------
+            # 列幅調整
+            # ------------------------
+            col_widths = {
+                "A": 3,
+                "B": 12,
+                "C": 40,
+                "D": 40,
+                "E": 28,
+                "F": 20,
+                "G": 20,
+                "H": 20,
+                "I": 67,
+                "J": 67
+            }
+
+            for col, width in col_widths.items():
+                ws.column_dimensions[col].width = width
+
+            font = Font(name="Meiryo UI")
+
+            # ------------------------
+            # 折り返し設定、中央揃え、フォント設定
+            # ------------------------
+            for row in ws.iter_rows():
+                for cell in row:
+                    cell.alignment = Alignment(
+                        wrap_text=True,
+                        vertical="center"
+                    )
+                    cell.font = font
+
+            # ------------------------
+            # 再保存（重要）
+            # ------------------------
+            output2 = BytesIO()
+            wb.save(output2)
+            excel_data = output2.getvalue()
+
+            # ダウンロード
+            st.download_button(
+                label="Excelダウンロード",
+                data=excel_data,
+                file_name=f"{site}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
             
