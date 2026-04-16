@@ -25,7 +25,7 @@ def get_atlanticCouncil_articles(text):
         return None
     rows = []
 
-    pattern = r'[A-Z][a-z]+ \d{1,2}, \d{4}'
+    pattern = r'^[A-Z][a-z]+ \d{1,2}, \d{4}$'
     while True:
         resultSearchDate = searchDate(lines,index, pattern)
         if resultSearchDate == -1:
@@ -99,9 +99,42 @@ def get_csis_articles(text):
     return df
 
 #Brookings
-def get_brookings_articles():
+def get_brookings_articles(text):
+    lines = text.splitlines()
+    
+    index = -1
+    pattern = re.compile(r"\d{1,7}\s+results found")
+
+    for i, line in enumerate(lines):
+        if pattern.search(line):
+            index = i
+            break
+    if index == -1:
+        st.error("キーワード「数字 results found」が見つかりませんでした。")
+        return None
+    
     rows = []
-    df = pd.DataFrame(rows, columns=["#", "日付", "レポートタイトル", "URL","Thinktank名"])
+    pattern = r'^[A-Z][a-z]+ \d{1,2}, \d{4}$'
+    while True:
+        resultSearchDate = searchDate(lines,index,pattern)
+        if resultSearchDate == -1:
+            break
+        else:
+            index += resultSearchDate
+        date = lines[index]
+        title = lines[index-3]
+        title2 = lines[index-6]
+        if title == title2:
+            author = lines[index-2]
+            topic = lines[index-4]
+        else:
+            author = "N/A"
+            topic = lines[index-3]
+            title = lines[index-2]
+
+        rows.append(["", date, title, "","Brookings Institute","",topic,author,"",""])
+        index += 5
+    df = pd.DataFrame(rows, columns=["#", "日付", "レポートタイトル", "URL","Thinktank名","関係国","トピック","執筆者","まとめ翻訳","まとめ翻訳英文"])
 
     return df
 
@@ -144,8 +177,7 @@ else:
 
     site = st.selectbox(
         "取得するサイトを選択してください",
-        #["Brookings", "CSIS"]
-        ["AtlanticCouncil","CSIS"]
+        ["Atlantic Council","CSIS","Brookings Institute"]
     )
 
     # レイアウト作成
@@ -172,11 +204,11 @@ else:
         df = None
 
         try:
-            if site == "AtlanticCouncil":
+            if site == "Atlantic Council":
                 df = get_atlanticCouncil_articles(text)
             elif site == "CSIS":
                 df = get_csis_articles(text)
-            elif site == "Brookings":
+            elif site == "Brookings Institute":
                 df = get_brookings_articles(text)
 
             if df is not None:
