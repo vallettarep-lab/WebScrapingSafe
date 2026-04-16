@@ -196,6 +196,11 @@ else:
         # ボタンの on_click に関数を渡す（ここがポイント！）
         st.button("クリア", on_click=clear_text, use_container_width=True)
 
+    order = st.radio(
+        "並び順",
+        ["新しい順（サイトそのまま）", "古い順（順番反転）"]
+    )
+    
     # ボタン
     if st.button("記事を取得"):
 
@@ -219,6 +224,9 @@ else:
 
         except Exception as e:
             st.error(str(e))
+        
+        if order == "古い順（順番反転）":
+            df = df.iloc[::-1].reset_index(drop=True)
         
         if df is not None:
             # Excel作成
