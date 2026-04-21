@@ -138,6 +138,43 @@ def get_brookings_articles(text):
 
     return df
 
+#CFR
+def get_cfr_articles(text):
+    lines = text.splitlines()
+    
+    index = -1
+    pattern = re.compile(r"\d{1,7}\s+results")
+
+    for i, line in enumerate(lines):
+        if pattern.search(line):
+            index = i
+            break
+    if index == -1:
+        st.error("キーワード「数字 results」が見つかりませんでした。")
+        return None
+    
+    rows = []
+    pattern = r'^[A-Z][a-z]+ \d{1,2}, \d{4}$'
+    while True:
+        resultSearchDate = searchDate(lines,index,pattern)
+        if resultSearchDate == -1:
+            break
+        else:
+            index += resultSearchDate
+        date = lines[index]
+        title = lines[index-1]
+        author = lines[index+1]
+        if author.startswith("By"):
+            author = author[2:].strip()
+        else:
+            author = "N/A"
+
+        rows.append(["", date, title, "","CFR","","N/A",author,"",""])
+        index += 3
+    df = pd.DataFrame(rows, columns=["#", "日付", "レポートタイトル", "URL","Thinktank名","関係国","トピック","執筆者","まとめ翻訳","まとめ翻訳英文"])
+
+    return df
+
 # クリア処理を行う関数を定義
 def clear_text():
     st.session_state["input_text"] = ""
@@ -177,7 +214,7 @@ else:
 
     site = st.selectbox(
         "取得するサイトを選択してください",
-        ["Atlantic Council","CSIS","Brookings Institute"]
+        ["Atlantic Council","CSIS","Brookings Institute","CFR"]
     )
 
     # レイアウト作成
@@ -215,6 +252,8 @@ else:
                 df = get_csis_articles(text)
             elif site == "Brookings Institute":
                 df = get_brookings_articles(text)
+            elif site == "CFR":
+                df = get_cfr_articles(text)
 
             if df is not None:
                 if len(df) > 0:
