@@ -1,9 +1,53 @@
 import streamlit as st
 import pandas as pd
 import re
+import requests
+import time
 from io import BytesIO
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment,Font
+
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
+
+def url_exists(url):
+    try:
+        response = requests.head(
+            url,
+            headers=headers,
+            timeout=5,
+            allow_redirects=True
+        )
+
+        return response.status_code == 200
+
+    except requests.RequestException:
+        return False
+    
+def normalize_text(text):
+    # 小文字化
+    text = text.lower()
+
+    # アポストロフィ削除
+    text = text.replace("'", "").replace("’", "")
+
+    # 英数字以外をスペースに置換
+    text = re.sub(r'[^a-z0-9]+', ' ', text)
+
+    # 単語分割
+    words = text.split()
+
+    # 削除したい単語
+    remove_words = {"a", "the", "to", "from", "in", "of", "and"}
+
+    # フィルタ
+    words = [w for w in words if w not in remove_words]
+
+    # ハイフン連結
+    result = '-'.join(words)
+
+    return result
 
 def searchDate(lines, index, pattern):
   recordLength = 12
@@ -175,6 +219,55 @@ def get_cfr_articles(text):
 
     return df
 
+#Hudson
+def get_hudson_articles(text):
+    lines = text.splitlines()
+    
+    index = -1
+    pattern = re.compile(r"\d{1,7}\s+Results:")
+
+    for i, line in enumerate(lines):
+        if pattern.search(line):
+            index = i
+            break
+    if index == -1:
+        st.error("キーワード「数字 Results:」が見つかりませんでした。")
+        return None
+    
+    rows = []
+    pattern = r'^[A-Z][a-z]+ \d{1,2}, \d{4}$'
+    while True:
+        resultSearchDate = searchDate(lines,index,pattern)
+        if resultSearchDate == -1:
+            break
+        else:
+            index += resultSearchDate
+        date = lines[index]
+        title = lines[index-2]
+        author = lines[index-1]
+        topic = lines[index-3]
+
+        fullurl = "N/A"
+        words = topic.split()
+        if(len(words) > 5):
+            topic = "N/A"
+            url = normalize_text(f"{title} {author}")
+            fullurl = f"https://www.hudson.org/{url}"
+        else:
+            url = normalize_text(f"{title} {author}")
+            urlTopic = normalize_text(topic)
+            fullurl = f"https://www.hudson.org/{urlTopic}/{url}"
+
+        if(not url_exists(fullurl)):
+            fullurl = "N/A"
+
+        rows.append(["", date, title, fullurl,"Hudson","",topic,author,"",""])
+        index += 5
+        time.sleep(0.5)
+    df = pd.DataFrame(rows, columns=["#", "日付", "レポートタイトル", "URL","Thinktank名","関係国","トピック","執筆者","まとめ翻訳","まとめ翻訳英文"])
+
+    return df
+
 # クリア処理を行う関数を定義
 def clear_text():
     st.session_state["input_text"] = ""
@@ -214,7 +307,7 @@ else:
 
     site = st.selectbox(
         "取得するサイトを選択してください",
-        ["Atlantic Council","CSIS","Brookings Institute","CFR"]
+        ["Atlantic Council","CSIS","Brookings Institute","CFR","Hudson"]
     )
 
     # レイアウト作成
@@ -254,6 +347,8 @@ else:
                 df = get_brookings_articles(text)
             elif site == "CFR":
                 df = get_cfr_articles(text)
+            elif site == "Hudson":
+                df = get_hudson_articles(text)
 
             if df is not None:
                 if len(df) > 0:
@@ -308,7 +403,16 @@ else:
                         vertical="center"
                     )
                     cell.font = font
+            # ------------------------
+            # URLにリンク付与
+            # ------------------------
+            from openpyxl.styles import Font
 
+            for row in ws.iter_rows(min_row=2):
+                cell = row[3]  # D列
+                if cell.value:
+                    cell.hyperlink = cell.value
+                    cell.font = Font(name="Meiryo UI", color="0000FF", underline="single")
             # ------------------------
             # 再保存（重要）
             # ------------------------
