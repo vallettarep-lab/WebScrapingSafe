@@ -25,7 +25,7 @@ def url_exists(url):
     except requests.RequestException:
         return False
     
-def normalize_text(text):
+def normalize_text(text,remove_words):
     # 小文字化
     text = text.lower()
 
@@ -39,7 +39,7 @@ def normalize_text(text):
     words = text.split()
 
     # 削除したい単語
-    remove_words = {"a", "the", "to", "from", "in", "of", "and"}
+    #remove_words = {"a", "the", "to", "from", "in", "of", "and"}
 
     # フィルタ
     words = [w for w in words if w not in remove_words]
@@ -93,10 +93,32 @@ def get_atlanticCouncil_articles(text):
             overview = lines[index+2]
             topic1 = lines[index+4]
             topic2 = lines[index+5]
-        
-        rows.append(["", date, title, "","Atlantic Council","",f"{topic1}、{topic2}",author,"",overview])
+        fullurl = "N/A"
+        remove_words = {""}
+        url = normalize_text(title,remove_words)
+        if(tag == "Dispatches"):
+            fullurl = f"https://www.atlanticcouncil.org/dispatches/{url}"
+        elif(tag == "Issue Brief"):
+            fullurl = f"https://www.atlanticcouncil.org/in-depth-research-reports/issue-brief/{url}"
+        elif(tag == "UkraineAlert"):
+            fullurl = f"https://www.atlanticcouncil.org/blogs/ukrainealert/{url}"
+        elif(tag == "MENASource"):
+            fullurl = f"https://www.atlanticcouncil.org/blogs/menasource/{url}"
+        elif(tag == "Transcript"):
+            fullurl = f"https://www.atlanticcouncil.org/news/transcripts/{url}"
+        elif(tag == "Event Recap"):
+            fullurl = f"https://www.atlanticcouncil.org/commentary/event-recap/{url}"
+        else:
+            tagurl = normalize_text(tag,remove_words)
+            fullurl = f"https://www.atlanticcouncil.org/content-series/{tagurl}/{url}"
+
+        if(not url_exists(fullurl)):
+            fullurl = "N/A"
+
+        rows.append(["", date, title, fullurl,"Atlantic Council","",f"{topic1}、{topic2}",author,"",overview])
         index += 7
-        df = pd.DataFrame(rows, columns=["#", "日付", "レポートタイトル", "URL","Thinktank名","関係国","トピック","執筆者","まとめ翻訳","まとめ翻訳英文"])
+        time.sleep(0.5)
+    df = pd.DataFrame(rows, columns=["#", "日付", "レポートタイトル", "URL","Thinktank名","関係国","トピック","執筆者","まとめ翻訳","まとめ翻訳英文"])
     return df
 
 #CSIS
@@ -158,7 +180,7 @@ def get_brookings_articles(text):
         return None
     
     rows = []
-    pattern = r'^[A-Z][a-z]+ \d{1,2}, \d{4}$'
+    pattern = r'[A-Z][a-z]+ \d{1,2}, \d{4}$'
     while True:
         resultSearchDate = searchDate(lines,index,pattern)
         if resultSearchDate == -1:
@@ -166,6 +188,9 @@ def get_brookings_articles(text):
         else:
             index += resultSearchDate
         date = lines[index]
+        pattern = r'[A-Z][a-z]+ \d{1,2}, \d{4}'
+        match = re.search(pattern, date)
+        date = match.group()
         title = lines[index-3]
         title2 = lines[index-6]
         if title == title2:
@@ -248,14 +273,15 @@ def get_hudson_articles(text):
         topic = lines[index-3]
 
         fullurl = "N/A"
+        remove_words = {"a", "the", "to", "from", "in", "of", "and"}
         words = topic.split()
         if(len(words) > 5):
             topic = "N/A"
-            url = normalize_text(f"{title} {author}")
+            url = normalize_text(f"{title} {author}",remove_words)
             fullurl = f"https://www.hudson.org/{url}"
         else:
-            url = normalize_text(f"{title} {author}")
-            urlTopic = normalize_text(topic)
+            url = normalize_text(f"{title} {author}",remove_words)
+            urlTopic = normalize_text(topic,remove_words)
             fullurl = f"https://www.hudson.org/{urlTopic}/{url}"
 
         if(not url_exists(fullurl)):
